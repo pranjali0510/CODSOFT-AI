@@ -1,0 +1,44 @@
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+# Sample dataset
+data = {
+    'userId': [1, 1, 1, 2, 2, 2, 3, 3, 3],
+    'movieId': [1, 2, 3, 1, 2, 4, 2, 3, 4],
+    'rating': [4.0, 4.5, 3.0, 5.0, 3.5, 4.0, 5.0, 4.5, 3.0]
+}
+
+df = pd.DataFrame(data)
+
+user_item_matrix = df.pivot(index='userId', columns='movieId', values='rating').fillna(0)
+
+user_similarity = cosine_similarity(user_item_matrix)
+
+user_similarity_df = pd.DataFrame(user_similarity, index=user_item_matrix.index, columns=user_item_matrix.index)
+
+def get_top_n_similar_users(user_id, n=5):
+    return user_similarity_df[user_id].sort_values(ascending=False)[1:n+1].index
+
+def predict_rating(user_id, movie_id):
+    similar_users = get_top_n_similar_users(user_id)
+    similar_users_ratings = user_item_matrix.loc[similar_users, movie_id]
+    user_similarity_scores = user_similarity_df[user_id][similar_users]
+
+    if similar_users_ratings.sum() == 0:
+        return 0  
+
+    return np.dot(similar_users_ratings, user_similarity_scores) / user_similarity_scores.sum()
+
+def recommend_movies(user_id, n=5):
+    user_ratings = user_item_matrix.loc[user_id]
+    unrated_movies = user_ratings[user_ratings == 0].index
+    movie_scores = [(movie_id, predict_rating(user_id, movie_id)) for movie_id in unrated_movies]
+    movie_scores.sort(key=lambda x: x[1], reverse=True)
+    return movie_scores[:n]
+
+user_id = 1
+recommended_movies = recommend_movies(user_id, n=3)
+print(f"Top 3 movie recommendations for user {user_id}:")
+for movie_id, score in recommended_movies:
+    print(f"Movie ID: {movie_id}, Predicted Rating: {score:.2f}")
